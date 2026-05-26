@@ -11,6 +11,8 @@ export default defineConfig({
       input: {
         main: resolve(root, 'index.html'),
         publications: resolve(root, 'publications/index.html'),
+        project1: resolve(root, 'projects/project1/index.html'),
+        project2: resolve(root, 'projects/project2/index.html'),
       },
     },
   },

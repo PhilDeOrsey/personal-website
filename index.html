@@ -8,18 +8,24 @@
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
+    <aside id="sidebar" class="sidebar" aria-label="Site navigation"></aside>
     <main class="page">
       <header class="hero">
-        <h1>Dr. Philip DeOrsey</h1>
-        <p class="tagline">Software engineer and applied mathematician.</p>
-        <p class="muted">More to come&hellip;</p>
+        <div class="hero-row">
+          <img
+            class="avatar"
+            src="/assets/profile.jpg"
+            alt="Philip DeOrsey"
+            width="120"
+            height="120"
+          />
+          <div class="hero-text">
+            <h1>Dr. Philip DeOrsey</h1>
+            <p class="tagline">Software engineer and applied mathematician.</p>
+            <p class="muted">More to come&hellip;</p>
+          </div>
+        </div>
       </header>
-
-      <nav class="links" aria-label="Sections">
-        <ul>
-          <li><a href="publications/">Publications</a></li>
-        </ul>
-      </nav>
 
       <footer class="footer">
         <a href="mailto:philip.deorsey@gmail.com">philip.deorsey@gmail.com</a>
