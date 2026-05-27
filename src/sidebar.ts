@@ -37,14 +37,59 @@ const renderLeaf = (item: NavItem, here: string): string => {
 
 const renderItem = (item: NavItem, here: string): string => {
   if (item.children) {
-    const open = item.children.some((c) => containsCurrent(c, here)) ? ' open' : '';
+    const isOpen = item.children.some((c) => containsCurrent(c, here));
+    const detailsAttrs = isOpen ? ' open class="expanded"' : '';
     const kids = item.children.map((c) => renderItem(c, here)).join('');
-    return `<li class="nav-group"><details${open}><summary>${escape(item.label)}</summary><ul class="nav-sublist">${kids}</ul></details></li>`;
+    return `<li class="nav-group"><details${detailsAttrs}><summary>${escape(item.label)}</summary><ul class="nav-sublist">${kids}</ul></details></li>`;
   }
   return renderLeaf(item, here);
+};
+
+const attachAccordion = (root: HTMLElement): void => {
+  const groups = root.querySelectorAll<HTMLDetailsElement>('.nav-group details');
+  groups.forEach((details) => {
+    const summary = details.querySelector<HTMLElement>('summary');
+    const sublist = details.querySelector<HTMLElement>('.nav-sublist');
+    if (!summary || !sublist) return;
+
+    summary.addEventListener('click', (event) => {
+      event.preventDefault();
+      const isOpen = details.hasAttribute('open');
+
+      if (isOpen) {
+        details.classList.remove('expanded');
+        sublist.style.height = `${sublist.scrollHeight}px`;
+        void sublist.offsetHeight;
+        sublist.style.height = '0px';
+
+        const onEnd = (e: TransitionEvent): void => {
+          if (e.propertyName !== 'height') return;
+          sublist.removeEventListener('transitionend', onEnd);
+          details.removeAttribute('open');
+          sublist.style.height = '';
+        };
+        sublist.addEventListener('transitionend', onEnd);
+      } else {
+        details.setAttribute('open', '');
+        const target = sublist.scrollHeight;
+        sublist.style.height = '0px';
+        void sublist.offsetHeight;
+        details.classList.add('expanded');
+        sublist.style.height = `${target}px`;
+
+        const onEnd = (e: TransitionEvent): void => {
+          if (e.propertyName !== 'height') return;
+          sublist.removeEventListener('transitionend', onEnd);
+          sublist.style.height = '';
+        };
+        sublist.addEventListener('transitionend', onEnd);
+      }
+    });
+  });
 };
 
 export const renderSidebar = (target: HTMLElement): void => {
   const here = normalizePath(window.location.pathname);
   target.innerHTML = `<nav aria-label="Primary"><ul class="nav-list">${nav.map((i) => renderItem(i, here)).join('')}</ul></nav>`;
+  attachAccordion(target);
 };

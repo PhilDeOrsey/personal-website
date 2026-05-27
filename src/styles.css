@@ -109,13 +109,24 @@ a:hover {
 
 .nav-group summary::before {
   content: "▸";
-  font-size: 0.75rem;
+  font-size: 1.2rem;
+  line-height: 1;
   color: var(--muted);
-  transition: transform 0.15s ease;
+  transition: transform 0.25s ease;
 }
 
-.nav-group details[open] > summary::before {
+.nav-group details.expanded > summary::before {
   transform: rotate(90deg);
+}
+
+.nav-sublist {
+  overflow: hidden;
+  opacity: 0;
+  transition: height 0.25s ease, opacity 0.25s ease;
+}
+
+.nav-group details.expanded > .nav-sublist {
+  opacity: 1;
 }
 
 .nav-group summary:hover {
@@ -221,6 +232,7 @@ a:hover {
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
+
 
 .footer {
   margin-top: 3rem;
