@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Project 1 &middot; Philip DeOrsey</title>
+    <meta name="description" content="An embedded Polypad canvas." />
+    <title>Polypad embed &middot; Philip DeOrsey</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
@@ -11,13 +12,18 @@
     <aside id="sidebar" class="sidebar" aria-label="Site navigation"></aside>
     <main class="page">
       <header class="hero">
-        <h1>Project 1</h1>
+        <h1>Polypad embed</h1>
       </header>
 
       <section class="prose">
-        <p class="muted">Details coming soon.</p>
+        <p>
+          A live <a href="https://polypad.amplify.com/" target="_blank" rel="noopener noreferrer">Polypad</a> canvas, embedded via the public JS API.
+        </p>
+        <div id="polypad" style="width: 100%; height: 600px; margin-top: 1.5rem;"></div>
       </section>
     </main>
+    <script src="https://polypad.amplify.com/api/v5.4.0/polypad.js?lang=en&apiKey=%VITE_POLYPAD_API_KEY%"></script>
+    <script>Polypad.create(document.querySelector('#polypad'));</script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
