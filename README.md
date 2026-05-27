@@ -1,6 +1,10 @@
 # personal-website
 
-My personal website. Built with Vite + TypeScript, deployed to GitHub Pages.
+Source for [phildeorsey.github.io/personal-website](https://phildeorsey.github.io/personal-website/).
+
+Primarily my personal site, but this repo also hosts the occasional demo, sandbox, or proof-of-concept — small things I want to share publicly or point at from a conversation. If you landed here from a link, the relevant code is probably under `projects/` or `src/`.
+
+Built with Vite + TypeScript, deployed to GitHub Pages.
 
 ## Develop
 
@@ -13,9 +17,6 @@ npm run preview  # preview built site
 
 ## Deploy
 
-Pushes to `main` are deployed by `.github/workflows/deploy.yml`. Enable Pages
-in repo Settings → Pages → Source: **GitHub Actions** before the first deploy.
-
-Live URL: https://phildeorsey.github.io/personal-website/
+Pushes to `main` are deployed by `.github/workflows/deploy.yml`. Pages source is set to **GitHub Actions** in repo settings.
 
 When a custom domain is added, drop `base` from `vite.config.ts`.
