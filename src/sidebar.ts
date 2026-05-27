@@ -2,7 +2,9 @@ import { nav, type NavItem } from './nav';
 
 const BASE = import.meta.env.BASE_URL;
 
-const url = (path: string): string => BASE + path;
+const isExternal = (href: string): boolean => /^(https?:)?\/\//.test(href);
+
+const resolveUrl = (href: string): string => (isExternal(href) ? href : BASE + href);
 
 const escape = (s: string): string =>
   s.replace(
@@ -13,11 +15,25 @@ const escape = (s: string): string =>
 
 const normalizePath = (p: string): string => (p.endsWith('/') ? p : `${p}/`);
 
-const isCurrent = (item: NavItem, here: string): boolean =>
-  item.href !== undefined && normalizePath(url(item.href)) === here;
+const isCurrent = (item: NavItem, here: string): boolean => {
+  if (item.href === undefined || isExternal(item.href)) return false;
+  return normalizePath(resolveUrl(item.href)) === here;
+};
 
 const containsCurrent = (item: NavItem, here: string): boolean =>
   isCurrent(item, here) || (item.children?.some((c) => containsCurrent(c, here)) ?? false);
+
+const renderLeaf = (item: NavItem, here: string): string => {
+  const href = item.href ?? '';
+  const external = isExternal(href);
+  const attrs = external
+    ? ' target="_blank" rel="noopener noreferrer"'
+    : isCurrent(item, here)
+      ? ' aria-current="page"'
+      : '';
+  const indicator = external ? '<span class="ext" aria-hidden="true">↗</span>' : '';
+  return `<li><a href="${resolveUrl(href)}"${attrs}>${escape(item.label)}${indicator}</a></li>`;
+};
 
 const renderItem = (item: NavItem, here: string): string => {
   if (item.children) {
@@ -25,8 +41,7 @@ const renderItem = (item: NavItem, here: string): string => {
     const kids = item.children.map((c) => renderItem(c, here)).join('');
     return `<li class="nav-group"><details${open}><summary>${escape(item.label)}</summary><ul class="nav-sublist">${kids}</ul></details></li>`;
   }
-  const current = isCurrent(item, here) ? ' aria-current="page"' : '';
-  return `<li><a href="${url(item.href ?? '')}"${current}>${escape(item.label)}</a></li>`;
+  return renderLeaf(item, here);
 };
 
 export const renderSidebar = (target: HTMLElement): void => {

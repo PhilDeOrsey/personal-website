@@ -6,7 +6,13 @@ export type NavItem = {
 
 export const nav: NavItem[] = [
   { label: 'Home', href: '' },
-  { label: 'Publications', href: 'publications/' },
+  {
+    label: 'Academic Work',
+    children: [
+      { label: 'Publications', href: 'publications/' },
+      { label: 'Math Circles', href: 'https://sites.google.com/site/westernmassachusettsmathcircle' },
+    ],
+  },
   {
     label: 'Projects',
     children: [
