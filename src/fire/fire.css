@@ -1,0 +1,421 @@
+/* FIRE calculator — standalone tool layout. Reuses the site's theme tokens
+   from styles.css :root so light/dark stays consistent. */
+
+@import '../styles.css';
+
+.fire-app {
+  width: 100%;
+  max-width: 80rem;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem 4rem;
+}
+
+.fire-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.fire-head h1 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.fire-head .back {
+  font-size: 0.9rem;
+}
+
+.disclaimer {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 0 0 1.25rem;
+}
+
+.fire-layout {
+  display: grid;
+  grid-template-columns: 22rem 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 56rem) {
+  .fire-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Controls ---- */
+
+#controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.control-group {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--sidebar-bg);
+  padding: 0.25rem 0.75rem;
+}
+
+.control-group > summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.4rem 0;
+  list-style: none;
+}
+
+.control-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.control-group > summary::before {
+  content: '▸ ';
+  color: var(--muted);
+}
+
+.control-group[open] > summary::before {
+  content: '▾ ';
+}
+
+.control-list {
+  padding: 0.25rem 0 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.control label {
+  display: block;
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin-bottom: 0.2rem;
+}
+
+.control-val {
+  float: right;
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.control-row input[type='range'] {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+.control-row input[type='number'] {
+  width: 6.5rem;
+}
+
+input[type='number'],
+input[type='text'],
+select {
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  padding: 0.25rem 0.4rem;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.event-row {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  flex-wrap: wrap;
+}
+
+.event-row input[type='number'] {
+  width: 5rem;
+}
+
+.add-event,
+.scn-row button,
+.btn-like {
+  background: var(--bg);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.add-event:hover,
+.scn-row button:hover,
+.btn-like:hover {
+  background: var(--border);
+}
+
+[data-role='ev-del'],
+.chip-x {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0 0.2rem;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* ---- Results panel ---- */
+
+.results {
+  position: sticky;
+  top: 1rem;
+}
+
+#stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.stat {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--sidebar-bg);
+}
+
+.stat-k {
+  display: block;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+}
+
+.stat-v {
+  font-size: 1.05rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.good {
+  color: #1f9d55;
+}
+
+.bad {
+  color: #d8431f;
+}
+
+/* ---- Scenario bar ---- */
+
+#scenario-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.scn-row {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.scn-compare {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.scn-list {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.scn-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.scn-chip button {
+  background: none;
+  border: none;
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--fg);
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+}
+
+.scn-chip button[data-load]:hover {
+  color: var(--accent);
+}
+
+/* ---- Overlay toggles ---- */
+
+#overlay-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+}
+
+.ovl-label {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.72rem;
+}
+
+.ovl {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+}
+
+/* ---- Bridge breakdown panel ---- */
+
+.bridge {
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--sidebar-bg);
+  padding: 0.75rem 1rem;
+  margin-top: 1rem;
+}
+
+.bridge h3 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.bridge-phases {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 40rem) {
+  .bridge-phases {
+    grid-template-columns: 1fr;
+  }
+}
+
+.phase-h {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--accent);
+  margin-bottom: 0.25rem;
+}
+
+.bridge .phase p {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
+/* ---- Chart ---- */
+
+.chart-wrap {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  background: var(--sidebar-bg);
+}
+
+.fire-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.fire-chart .grid {
+  stroke: var(--border);
+  stroke-width: 1;
+}
+
+.fire-chart .axis {
+  stroke: var(--muted);
+  stroke-width: 1;
+}
+
+.fire-chart .axis-label {
+  fill: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.fire-chart .axis-title {
+  fill: var(--muted);
+  font-size: 12px;
+}
+
+.fire-chart .cursor-line {
+  stroke: var(--muted);
+  stroke-dasharray: 3 3;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+}
+
+.legend-item,
+.tip-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.swatch {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 0.15rem;
+  display: inline-block;
+}
+
+.chart-tooltip {
+  position: absolute;
+  top: 0.75rem;
+  transform: translateX(-50%);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.tip-age {
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}

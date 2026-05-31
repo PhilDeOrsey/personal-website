@@ -1,0 +1,45 @@
+{
+  "_README": "Copy this file to 'my-data.local.json' (same folder) and put your real numbers in. That filename is gitignored (*.local.json) and is auto-loaded only in `npm run dev` when no saved state exists — it is never committed and never deployed. The easiest way to generate it: fill the form in the browser, click 'Export JSON', and save the download here as my-data.local.json. All values are today's dollars; rates are fractions (0.07 = 7%).",
+  "current": {
+    "currentYear": 2026,
+    "yourAge": 0,
+    "spouseAge": 0,
+    "horizonAge": 95,
+
+    "cashBalance": 0,
+    "taxableBalance": 0,
+    "pretaxBalance": 0,
+    "rothBalance": 0,
+
+    "cashContrib": 0,
+    "cashCap": 0,
+    "taxableContrib": 0,
+    "pretaxContrib": 0,
+    "rothContrib": 0,
+    "employerMatch": 0,
+
+    "yourIncome": 0,
+    "spouseIncome": 0,
+    "incomeEvents": [],
+
+    "annualSpend": 0,
+    "mortgage": { "annualPayment": 0, "yearsRemaining": 0 },
+
+    "nominalReturn": 0.07,
+    "cashReturn": 0.04,
+    "inflation": 0.03,
+
+    "ssYouAnnual": 0,
+    "ssYouClaimAge": 67,
+    "ssSpouseAnnual": 0,
+    "ssSpouseClaimAge": 67,
+
+    "taxMode": "effective",
+    "effectiveTaxRate": 0.15,
+
+    "retireMode": "earliest",
+    "retireAge": 55,
+    "withdrawalRate": 0.04
+  },
+  "scenarios": {}
+}

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="description" content="FIRE calculator." />
+    <title>FIRE calculator</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <div class="fire-app">
+      <header class="fire-head">
+        <h1>FIRE calculator</h1>
+        <a class="back" href="/">&larr; back to site</a>
+      </header>
+      <p class="disclaimer">
+        Rough planning model in today&rsquo;s dollars. Taxes, Social Security, and RMDs are
+        approximations &mdash; not financial or tax advice. All numbers stay in your browser
+        (localStorage); nothing is uploaded.
+      </p>
+
+      <div id="scenario-bar"></div>
+
+      <div class="fire-layout">
+        <aside id="controls" aria-label="Inputs"></aside>
+        <section class="results">
+          <div id="stats"></div>
+          <div id="overlay-toggles" aria-label="Chart overlays"></div>
+          <div class="chart-wrap">
+            <div id="chart"></div>
+          </div>
+          <div id="bridge-panel"></div>
+        </section>
+      </div>
+    </div>
+    <script type="module" src="/src/fire/main.ts"></script>
+  </body>
+</html>

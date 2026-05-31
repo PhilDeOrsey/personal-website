@@ -16,6 +16,8 @@ export default defineConfig({
         mathCircles: resolve(root, 'math-circles/index.html'),
         project1: resolve(root, 'projects/project1/index.html'),
         project2: resolve(root, 'projects/project2/index.html'),
+        // Unlinked tool route — built/deployed but not in src/nav.ts.
+        fire: resolve(root, 'fire/index.html'),
       },
     },
   },
