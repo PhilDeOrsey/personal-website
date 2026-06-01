@@ -39,6 +39,7 @@
 
     "retireMode": "earliest",
     "retireAge": 55,
+    "spouseRetireAge": 55,
     "withdrawalRate": 0.04
   },
   "scenarios": {}

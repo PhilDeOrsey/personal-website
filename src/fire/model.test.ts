@@ -42,6 +42,14 @@ const retiredPretaxOnly = (over: Partial<FireInputs> = {}): FireInputs => ({
 
 const fiOf = (over: Partial<FireInputs>): number => simulate({ ...base(), ...over }).fiAge ?? 999;
 
+// Earliest age at which BOTH partners can retire together and survive.
+const jointFiAge = (inp: FireInputs): number => {
+  for (let a = inp.yourAge; a <= inp.horizonAge; a++) {
+    if (simulate({ ...inp, retireMode: 'fixed', retireAge: a, spouseRetireAge: a }).depletionAge === null) return a;
+  }
+  return inp.horizonAge;
+};
+
 describe('invariants', () => {
   test('balances never go negative', () => {
     for (const inp of [base(), { ...base(), taxMode: 'brackets' as const }]) {
@@ -62,8 +70,9 @@ describe('invariants', () => {
     assert.equal(JSON.stringify(simulate(base()).rows), JSON.stringify(simulate(base()).rows));
   });
 
-  test('accumulation is monotonic while working', () => {
-    const p = simulate({ ...base(), retireMode: 'fixed', retireAge: 65 });
+  test('accumulation is monotonic while both work', () => {
+    // Both retire at 65; default ages are equal, so there's no draw-down gap.
+    const p = simulate({ ...base(), retireMode: 'fixed', retireAge: 65, spouseRetireAge: 65 });
     const acc = p.rows.filter((r) => r.working);
     acc.forEach((r, i) => {
       if (i > 0) assert.ok(r.total >= acc[i - 1].total - 1);
@@ -80,8 +89,10 @@ describe('cash-flow conservation', () => {
   ] as const) {
     test(`identity holds [${label}]`, () => {
       const inp = { ...base(), ...over };
-      const fi = simulate(inp).fiAge ?? 50;
-      const p = simulate({ ...inp, retireMode: 'fixed', retireAge: Math.max(inp.yourAge + 1, fi) });
+      // Retire both together at a jointly-sustainable age so the fully-retired
+      // years are funded (the identity only holds when spending is met).
+      const rAge = jointFiAge(inp);
+      const p = simulate({ ...inp, retireMode: 'fixed', retireAge: rAge, spouseRetireAge: rAge });
       const r = realReturn(inp.nominalReturn, inp.inflation);
       const rc = realReturn(inp.cashReturn, inp.inflation);
       let worst = 0;
@@ -100,11 +111,18 @@ describe('cash-flow conservation', () => {
 });
 
 describe('earliest FI', () => {
-  test('FI age is sustainable; FI age − 1 depletes', () => {
+  test('FI age is sustainable; FI age − 1 depletes (both retiring together)', () => {
     const fi = simulate(base()).fiAge;
     assert.notEqual(fi, null);
-    assert.equal(simulate({ ...base(), retireMode: 'fixed', retireAge: fi! }).depletionAge, null);
-    assert.notEqual(simulate({ ...base(), retireMode: 'fixed', retireAge: fi! - 1 }).depletionAge, null);
+    // Joint FI: retire BOTH at the age (default ages are equal, so spouse age = fi).
+    assert.equal(
+      simulate({ ...base(), retireMode: 'fixed', retireAge: fi!, spouseRetireAge: fi! }).depletionAge,
+      null,
+    );
+    assert.notEqual(
+      simulate({ ...base(), retireMode: 'fixed', retireAge: fi! - 1, spouseRetireAge: fi! - 1 }).depletionAge,
+      null,
+    );
   });
 
   test('a genuinely underfunded retirement flags depletion', () => {
@@ -137,7 +155,13 @@ describe('comparative statics', () => {
 
 describe('mortgage', () => {
   test('spend includes the payment before payoff and drops after', () => {
-    const inp = { ...base(), retireMode: 'fixed' as const, retireAge: base().yourAge + 1 };
+    // Retire both immediately (no staggered gap) so every year is fully retired.
+    const inp = {
+      ...base(),
+      retireMode: 'fixed' as const,
+      retireAge: base().yourAge + 1,
+      spouseRetireAge: base().spouseAge + 1,
+    };
     const yrs = inp.mortgage!.yearsRemaining;
     const rows = simulate(inp).rows;
     const pre = rows.find((r) => !r.working && r.yourAge - inp.yourAge < yrs);
@@ -171,6 +195,60 @@ describe('taxes', () => {
       simulate(retiredPretaxOnly({ annualSpend: spend, taxMode: 'brackets' })).rows.find((r) => !r.working)!.tax;
     assert.ok(taxAt(50_000) >= 0);
     assert.ok(taxAt(150_000) > taxAt(50_000));
+  });
+});
+
+describe('staggered retirement', () => {
+  // Fixture with a clear gap: you retire early, spouse keeps a high income.
+  const staggered = (over: Partial<FireInputs> = {}): FireInputs => ({
+    ...base(),
+    yourAge: 50,
+    spouseAge: 50,
+    retireMode: 'fixed',
+    retireAge: 50, // you retire now
+    spouseRetireAge: 55, // spouse works 5 more years
+    yourIncome: 120_000,
+    spouseIncome: 150_000,
+    annualSpend: 90_000,
+    mortgage: null,
+    ...over,
+  });
+
+  test('during the gap, the working spouse still earns', () => {
+    const rows = simulate(staggered()).rows;
+    const gap = rows.find((r) => r.yourAge === 52)!; // you retired, spouse (52) working
+    assert.equal(gap.earnedIncome, 150_000);
+    assert.ok(gap.working);
+  });
+
+  test('spouse income above spend means no portfolio draw during the gap', () => {
+    const rows = simulate(staggered()).rows;
+    const before = rows.find((r) => r.yourAge === 51)!;
+    const during = rows.find((r) => r.yourAge === 52)!;
+    // Spouse earns 150k > 90k spend, so the portfolio should grow, not shrink.
+    assert.ok(during.total >= before.total);
+  });
+
+  test('once both retire, earned income is zero and the portfolio is drawn', () => {
+    const rows = simulate(staggered()).rows;
+    const bothRetired = rows.find((r) => r.yourAge === 56)!; // spouse 56 > 55
+    assert.equal(bothRetired.earnedIncome, 0);
+    assert.ok(!bothRetired.working);
+  });
+
+  test("'earliest' mode ignores the spouse slider — they retire together", () => {
+    // FI age = earliest BOTH can retire, so the spouse input doesn't move it.
+    const a = simulate({ ...base(), retireMode: 'earliest', spouseRetireAge: 45 });
+    const b = simulate({ ...base(), retireMode: 'earliest', spouseRetireAge: 65 });
+    assert.equal(a.fiAge, b.fiAge);
+    // The resolved spouse age tracks yours (default ages are equal here).
+    assert.equal(a.spouseRetireAge, a.retireAge);
+  });
+
+  test("'fixed' mode honors the spouse slider independently", () => {
+    const p = simulate({ ...base(), retireMode: 'fixed', retireAge: 60, spouseRetireAge: 58 });
+    assert.equal(p.retireAge, 60);
+    assert.equal(p.spouseRetireAge, 58);
   });
 });
 
@@ -214,8 +292,15 @@ describe('required-portfolio curve', () => {
   const endOfYear = (a: number) => proj.rows.find((r) => r.yourAge === a)!.total;
   const fi = proj.fiAge!;
 
-  test('is non-increasing with age', () => {
-    for (let i = 1; i < curve.length; i++) assert.ok(curve[i].required <= curve[i - 1].required + 1);
+  test('all required values are positive', () => {
+    assert.ok(curve.every((c) => c.required > 0));
+  });
+
+  test('descends once both partners are retired', () => {
+    // Before the spouse retires she bridges spend, so the curve can rise; after
+    // both are retired it's a pure drawdown and must be non-increasing.
+    const post = curve.filter((c) => c.age >= inp.spouseRetireAge);
+    for (let i = 1; i < post.length; i++) assert.ok(post[i].required <= post[i - 1].required + 1);
   });
 
   test('SS-aware requirement is below the naive 25× number at FI age', () => {

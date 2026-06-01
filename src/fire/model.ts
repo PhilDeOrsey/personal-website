@@ -77,7 +77,8 @@ export interface FireInputs {
 
   // Retirement
   retireMode: RetireMode;
-  retireAge: number; // your age (used when retireMode === 'fixed')
+  retireAge: number; // YOUR age (used when retireMode === 'fixed'; the value 'earliest' solves for)
+  spouseRetireAge: number; // SPOUSE's age — independent of yours, enables staggered retirement
   withdrawalRate: number; // for the FI-number crossover line, e.g. 0.04
 }
 
@@ -91,7 +92,8 @@ export interface YearRow {
   pretax: number;
   roth: number;
   total: number;
-  spend: number; // total spend incl. mortgage this year
+  spend: number; // portfolio-funded spend this year (full need in draw years, 0 while saving)
+  earnedIncome: number; // wages from whoever is still working this year
   ssIncome: number;
   tax: number; // income tax on withdrawals + taxable SS
   penalty: number; // 10% early-withdrawal penalty on pre-59½ pre-tax draws
@@ -101,7 +103,8 @@ export interface YearRow {
 export interface Projection {
   rows: YearRow[];
   realReturn: number;
-  retireAge: number; // the age actually used (resolved if 'earliest')
+  retireAge: number; // your age actually used (resolved if 'earliest')
+  spouseRetireAge: number; // spouse age actually used (synced to yours in 'earliest' mode)
   /**
    * Earliest age at which retiring is sustainable to the horizon (accounts for
    * mortgage payoff, Social Security, and taxes — not just the 4% crossover).
@@ -268,7 +271,13 @@ const project = (inputs: FireInputs, retireAge: number): Projection => {
     const yourAge = inputs.yourAge + i;
     const spouseAge = inputs.spouseAge + i;
     const year = inputs.currentYear + i;
-    const working = yourAge < retireAge;
+
+    // Retirement is per person: you stop at `retireAge`, your spouse at her own
+    // `spouseRetireAge`. Between the two, the still-working spouse keeps earning
+    // (covering part of spend) and contributing.
+    const youWorking = yourAge < retireAge;
+    const spouseWorking = spouseAge < inputs.spouseRetireAge;
+    const anyoneWorking = youWorking || spouseWorking;
 
     // Growth on all buckets (start-of-year balance grows through the year).
     b.cash *= 1 + rCash;
@@ -283,26 +292,45 @@ const project = (inputs: FireInputs, retireAge: number): Projection => {
       b.cash = inputs.cashCap;
     }
 
-    let ssIncome = 0;
     let tax = 0;
     let penalty = 0;
 
     const mortgageActive =
       inputs.mortgage !== null && i < inputs.mortgage.yearsRemaining;
     const mortgagePayment = mortgageActive ? inputs.mortgage!.annualPayment : 0;
+    const spendNeed = inputs.annualSpend + mortgagePayment;
 
-    if (working) {
-      // Contributions are funded from income, so they're capped by the surplus
-      // left after spending. Income-change events (a raise, going part-time, a
-      // spouse stopping work) flow straight through to how much can be saved.
-      const household =
-        incomeAt(inputs.yourIncome, 'you', yourAge, inputs.incomeEvents) +
-        incomeAt(inputs.spouseIncome, 'spouse', yourAge, inputs.incomeEvents);
-      const workSpend = inputs.annualSpend + mortgagePayment;
+    // Social Security is keyed to each person's own claim age, independent of work.
+    let ssIncome = 0;
+    if (yourAge >= inputs.ssYouClaimAge) ssIncome += inputs.ssYouAnnual;
+    if (spouseAge >= inputs.ssSpouseClaimAge) ssIncome += inputs.ssSpouseAnnual;
+
+    // Wages from whoever is still working (income-change events still apply).
+    const yourEarned = youWorking
+      ? incomeAt(inputs.yourIncome, 'you', yourAge, inputs.incomeEvents)
+      : 0;
+    const spouseEarned = spouseWorking
+      ? incomeAt(inputs.spouseIncome, 'spouse', yourAge, inputs.incomeEvents)
+      : 0;
+    const earnedIncome = yourEarned + spouseEarned;
+    // Baseline (both working) income, to scale how much of the household's
+    // contributions/match are still active once one person has retired.
+    const baselineIncome =
+      incomeAt(inputs.yourIncome, 'you', yourAge, inputs.incomeEvents) +
+      incomeAt(inputs.spouseIncome, 'spouse', yourAge, inputs.incomeEvents);
+    const incomeFrac = baselineIncome > 0 ? earnedIncome / baselineIncome : 0;
+
+    const surplus = earnedIncome + ssIncome - spendNeed;
+    let spend = 0;
+
+    if (anyoneWorking && surplus >= 0) {
+      // Earnings (plus any claimed SS) cover spend; save the surplus. Scaled by
+      // the share of earners still working and capped by what's affordable.
       const desired =
         inputs.cashContrib + inputs.taxableContrib + inputs.pretaxContrib + inputs.rothContrib;
-      const surplus = Math.max(0, household - workSpend);
-      const scale = desired > 0 ? Math.min(1, surplus / desired) : 0;
+      const empDesired = desired * incomeFrac;
+      const afford = empDesired > 0 ? Math.min(1, surplus / empDesired) : 0;
+      const scale = incomeFrac * afford;
 
       // Cash contributions fill the HYSA up to its cap; anything beyond the cap
       // overflows into the brokerage (taxable) bucket. 0 means no cap.
@@ -313,18 +341,16 @@ const project = (inputs: FireInputs, retireAge: number): Projection => {
 
       b.cash += cashAdd;
       b.taxable += inputs.taxableContrib * scale + overflow;
-      b.pretax += inputs.pretaxContrib * scale + (household > 0 ? inputs.employerMatch : 0);
+      b.pretax += inputs.pretaxContrib * scale + inputs.employerMatch * scale;
       b.roth += inputs.rothContrib * scale;
     } else {
-      // Retired: portfolio funds spending net of Social Security.
-      if (yourAge >= inputs.ssYouClaimAge) ssIncome += inputs.ssYouAnnual;
-      if (spouseAge >= inputs.ssSpouseClaimAge) ssIncome += inputs.ssSpouseAnnual;
-
-      const spendNeed = inputs.annualSpend + mortgagePayment;
+      // Fully retired, or earnings don't cover spend: draw the uncovered
+      // remainder from the portfolio (cash → taxable → pre-tax → Roth).
       const rmd = requiredMinimumDistribution(b.pretax, yourAge);
-      const result = fundSpending(b, spendNeed, ssIncome, rmd, inputs, yourAge);
+      const result = fundSpending(b, Math.max(0, spendNeed - earnedIncome), ssIncome, rmd, inputs, yourAge);
       tax = result.tax;
       penalty = result.penalty;
+      spend = spendNeed;
       // Treat sub-dollar gaps as rounding, not depletion.
       if (result.shortfall > 1 && depletionAge === null) depletionAge = yourAge;
     }
@@ -336,7 +362,6 @@ const project = (inputs: FireInputs, retireAge: number): Projection => {
     b.roth = Math.max(0, b.roth);
 
     const total = b.cash + b.taxable + b.pretax + b.roth;
-    const spend = working ? 0 : inputs.annualSpend + mortgagePayment;
     // Reference target: 25× core spend (the classic 4%-rule number). Mortgage is
     // excluded because it's temporary; this is a stable horizontal line.
     const fiNumber = inputs.annualSpend / inputs.withdrawalRate;
@@ -347,13 +372,14 @@ const project = (inputs: FireInputs, retireAge: number): Projection => {
       year,
       yourAge,
       spouseAge,
-      working,
+      working: anyoneWorking,
       cash: b.cash,
       taxable: b.taxable,
       pretax: b.pretax,
       roth: b.roth,
       total,
       spend,
+      earnedIncome,
       ssIncome,
       tax,
       penalty,
@@ -366,6 +392,7 @@ const project = (inputs: FireInputs, retireAge: number): Projection => {
     rows,
     realReturn: r,
     retireAge,
+    spouseRetireAge: inputs.spouseRetireAge,
     fiAge: null, // filled in by simulate()
     depletionAge,
     portfolioAtRetirement,
@@ -374,23 +401,35 @@ const project = (inputs: FireInputs, retireAge: number): Projection => {
   };
 };
 
+/** Spouse's age the same calendar year you reach `yourRetireAge`. */
+const spouseAgeWhenYouAre = (inputs: FireInputs, yourRetireAge: number): number =>
+  inputs.spouseAge + (yourRetireAge - inputs.yourAge);
+
 /**
- * Find the earliest retirement age (>= current age) whose projection survives
- * to the horizon without depleting, or null if none in range works.
+ * Earliest age at which you can BOTH retire together and survive to the horizon
+ * (FI age = when the household is done working), or null if none in range works.
  */
-const earliestSustainableAge = (inputs: FireInputs): number | null => {
+const earliestJointAge = (inputs: FireInputs): number | null => {
   for (let age = inputs.yourAge; age <= inputs.horizonAge; age++) {
-    if (project(inputs, age).depletionAge === null) return age;
+    const spouseRetireAge = spouseAgeWhenYouAre(inputs, age);
+    if (project({ ...inputs, spouseRetireAge }, age).depletionAge === null) return age;
   }
   return null;
 };
 
-/** Top-level entry: resolve the retirement age per mode and run the projection. */
+/**
+ * Top-level entry. The FI age always means "earliest you can both retire
+ * together." In 'earliest' mode the projection retires you both at that age; in
+ * 'fixed' mode it honors the two retirement-age sliders independently.
+ */
 export const simulate = (inputs: FireInputs): Projection => {
-  const fiAge = earliestSustainableAge(inputs);
-  const retireAge =
-    inputs.retireMode === 'earliest' ? (fiAge ?? inputs.horizonAge) : inputs.retireAge;
-  return { ...project(inputs, retireAge), fiAge };
+  const fiAge = earliestJointAge(inputs);
+  if (inputs.retireMode === 'earliest') {
+    const retireAge = fiAge ?? inputs.horizonAge;
+    const spouseRetireAge = spouseAgeWhenYouAre(inputs, retireAge);
+    return { ...project({ ...inputs, spouseRetireAge }, retireAge), fiAge };
+  }
+  return { ...project(inputs, inputs.retireAge), fiAge };
 };
 
 export interface RequiredPoint {
@@ -406,9 +445,9 @@ export interface RequiredPoint {
  * Where your projected net-worth line crosses it = your FI age.
  *
  * The candidate portfolio is split across buckets using your *projected* mix at
- * that age (so the tax treatment is realistic). Note: like the rest of the
- * model, this ignores the 10% penalty on pre-59½ pre-tax withdrawals, so very
- * early ages are slightly optimistic.
+ * that age (so the tax treatment is realistic). It models you both retiring
+ * together at that age — matching the joint FI definition — so your net-worth
+ * line crosses it at the FI age.
  */
 export const requiredPortfolioCurve = (
   inputs: FireInputs,
@@ -436,12 +475,6 @@ export const requiredPortfolioCurve = (
       taxableBalance: T * props.taxable,
       pretaxBalance: T * props.pretax,
       rothBalance: T * props.roth,
-      cashContrib: 0,
-      taxableContrib: 0,
-      pretaxContrib: 0,
-      rothContrib: 0,
-      employerMatch: 0,
-      incomeEvents: [],
       mortgage: inputs.mortgage
         ? {
             annualPayment: inputs.mortgage.annualPayment,
@@ -450,6 +483,7 @@ export const requiredPortfolioCurve = (
         : null,
       retireMode: 'fixed',
       retireAge: age,
+      spouseRetireAge: inputs.spouseAge + yearsFromNow, // both retire together at this age
     });
     const survives = (T: number): boolean => project(makeSub(T), age).depletionAge === null;
 
@@ -535,5 +569,6 @@ export const defaultInputs = (currentYear: number): FireInputs => ({
 
   retireMode: 'earliest',
   retireAge: 55,
+  spouseRetireAge: 55,
   withdrawalRate: 0.04,
 });

@@ -84,18 +84,21 @@ const stat = (k: string, v: string): string =>
   `<div class="stat"><span class="stat-k">${k}</span><span class="stat-v">${v}</span></div>`;
 
 const renderStats = (proj: Projection, extra: string): void => {
+  const earliest = inputs.retireMode === 'earliest';
+  const fiLabel = earliest ? 'FI age (both retire)' : 'FI age (both, earliest)';
   const fi = proj.fiAge !== null ? `${proj.fiAge} (${years(proj.fiAge - inputs.yourAge)})` : 'not reached';
-  const retire =
-    inputs.retireMode === 'earliest'
-      ? `${proj.retireAge} (earliest)`
-      : `${proj.retireAge} (fixed)`;
+  const retire = earliest ? `${proj.retireAge} (earliest)` : `${proj.retireAge} (fixed)`;
+  const spouseRetire = earliest
+    ? `${proj.spouseRetireAge} (with you)`
+    : `${proj.spouseRetireAge} (fixed)`;
   const outcome = proj.depletionAge !== null
     ? `<span class="bad">depletes at ${proj.depletionAge}</span>`
     : `<span class="good">funded through ${inputs.horizonAge}</span>`;
 
   $('#stats').innerHTML =
-    stat('FI age', fi) +
-    stat('Retire age', retire) +
+    stat(fiLabel, fi) +
+    stat('Your retire age', retire) +
+    stat('Spouse retire age', spouseRetire) +
     stat('Portfolio at retirement', money(proj.portfolioAtRetirement)) +
     stat('Real return', percent(proj.realReturn)) +
     stat('Outcome', outcome) +

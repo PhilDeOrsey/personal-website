@@ -16,6 +16,7 @@ interface NumberField {
   step: number;
   get: (i: FireInputs) => number;
   set: (i: FireInputs, v: number) => void;
+  showIf?: (i: FireInputs) => boolean;
 }
 
 interface SelectField {
@@ -25,6 +26,7 @@ interface SelectField {
   options: { value: string; label: string }[];
   get: (i: FireInputs) => string;
   set: (i: FireInputs, v: string) => void;
+  showIf?: (i: FireInputs) => boolean;
 }
 
 type Field = NumberField | SelectField;
@@ -50,7 +52,10 @@ const num = (
   step: number,
   get: (i: FireInputs) => number,
   set: (i: FireInputs, v: number) => void,
-): NumberField => ({ type: 'number', group, label, kind, min, max, step, get, set });
+  showIf?: (i: FireInputs) => boolean,
+): NumberField => ({ type: 'number', group, label, kind, min, max, step, get, set, showIf });
+
+const isFixed = (i: FireInputs): boolean => i.retireMode === 'fixed';
 
 const FIELDS: Field[] = [
   // Household
@@ -116,7 +121,8 @@ const FIELDS: Field[] = [
     get: (i) => i.retireMode,
     set: (i, v) => (i.retireMode = v as FireInputs['retireMode']),
   },
-  num('Retirement', 'Retire age (fixed)', 'age', 30, 90, 1, (i) => i.retireAge, (i, v) => (i.retireAge = v)),
+  num('Retirement', 'Your retire age', 'age', 30, 90, 1, (i) => i.retireAge, (i, v) => (i.retireAge = v), isFixed),
+  num('Retirement', 'Spouse retire age', 'age', 30, 90, 1, (i) => i.spouseRetireAge, (i, v) => (i.spouseRetireAge = v), isFixed),
   num('Retirement', 'Withdrawal rate', 'percent', 0.02, 0.08, 0.0025, (i) => i.withdrawalRate, (i, v) => (i.withdrawalRate = v)),
 ];
 
@@ -134,13 +140,18 @@ const fmtValue = (kind: Kind, v: number): string => {
   }
 };
 
+// Fields shown for a group given the current inputs (honors `showIf`). Render
+// and wiring must use the same list so data-idx stays aligned.
+const groupFields = (g: string, inputs: FireInputs): Field[] =>
+  FIELDS.filter((f) => f.group === g && (!f.showIf || f.showIf(inputs)));
+
 export const renderControls = (
   root: HTMLElement,
   inputs: FireInputs,
   onChange: () => void,
 ): void => {
   const groupsHtml = GROUPS.map((g) => {
-    const fields = FIELDS.filter((f) => f.group === g);
+    const fields = groupFields(g, inputs);
     const rows = fields
       .map((f, idx) => {
         const id = `f-${g}-${idx}`.replace(/\s+/g, '');
@@ -232,13 +243,16 @@ const wire = (root: HTMLElement, inputs: FireInputs, onChange: () => void): void
   root.querySelectorAll<HTMLElement>('.control[data-idx]').forEach((el) => {
     const g = el.dataset.group!;
     const idx = Number(el.dataset.idx);
-    const field = FIELDS.filter((f) => f.group === g)[idx];
+    const field = groupFields(g, inputs)[idx];
     if (!field) return;
 
     if (field.type === 'select') {
       const sel = el.querySelector<HTMLSelectElement>('[data-role="select"]')!;
       sel.addEventListener('change', () => {
         field.set(inputs, sel.value);
+        // A mode change (e.g. retirement mode) can show/hide other fields, so
+        // rebuild the controls before recomputing.
+        renderControls(root, inputs, onChange);
         onChange();
       });
       return;
