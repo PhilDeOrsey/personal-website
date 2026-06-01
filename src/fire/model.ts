@@ -183,9 +183,13 @@ const fundSpending = (
   let taxable = b.taxable;
   let roth = b.roth;
 
-  // Apply the after-tax proceeds of the forced RMD toward this year's need.
-  const rmdTax = taxOn(pretaxDrawn);
-  remaining -= pretaxDrawn - rmdTax;
+  // Seed the tax floor: tax owed on income we already have before drawing any
+  // more — the forced RMD (if any) plus the taxable portion of Social Security.
+  // Subtracting `pretaxDrawn - baseTax` applies the RMD's after-tax proceeds to
+  // the need AND, when there's no RMD, still folds the SS tax back in so the
+  // other buckets fund it (otherwise SS tax would be reported but never paid).
+  const baseTax = taxOn(pretaxDrawn);
+  remaining -= pretaxDrawn - baseTax;
 
   // 1) Cash / HYSA bucket first, as the spending buffer (tax-free to draw).
   if (remaining > 0) {
