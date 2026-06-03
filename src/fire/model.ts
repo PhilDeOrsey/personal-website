@@ -20,6 +20,14 @@ export interface IncomeEvent {
   newAnnual: number;
 }
 
+export interface ContributionEvent {
+  /** Applied at the start of the year in which YOU reach this age. */
+  atYourAge: number;
+  bucket: 'cash' | 'taxable' | 'pretax' | 'roth' | 'match';
+  /** New annual contribution for that bucket from then on (today's dollars). */
+  newAnnual: number;
+}
+
 export interface Mortgage {
   /** Annual principal + interest payment (today's dollars). */
   annualPayment: number;
@@ -50,6 +58,7 @@ export interface FireInputs {
   pretaxContrib: number;
   rothContrib: number;
   employerMatch: number; // added to pre-tax while working
+  contributionEvents: ContributionEvent[]; // step changes to any contribution by your age
 
   // Income (gross, today's dollars)
   yourIncome: number;
@@ -135,6 +144,20 @@ const incomeAt = (
   let value = base;
   for (const e of events) {
     if (e.who === who && yourAge >= e.atYourAge) value = e.newAnnual;
+  }
+  return value;
+};
+
+/** Resolve a contribution bucket's annual amount at a given "your age", applying events. */
+const contribAt = (
+  base: number,
+  bucket: ContributionEvent['bucket'],
+  yourAge: number,
+  events: ContributionEvent[],
+): number => {
+  let value = base;
+  for (const e of events) {
+    if (e.bucket === bucket && yourAge >= e.atYourAge) value = e.newAnnual;
   }
   return value;
 };
@@ -324,14 +347,22 @@ const project = (inputs: FireInputs, retireAge: number): Projection => {
       incomeAt(inputs.spouseIncome, 'spouse', yourAge, inputs.incomeEvents);
     const incomeFrac = baselineIncome > 0 ? earnedIncome / baselineIncome : 0;
 
+    // Contributions can step up/down at a given age (e.g. daycare ends, mortgage
+    // paid off → save more). Resolve each bucket's amount for this year.
+    const ev = inputs.contributionEvents;
+    const cashC = contribAt(inputs.cashContrib, 'cash', yourAge, ev);
+    const taxableC = contribAt(inputs.taxableContrib, 'taxable', yourAge, ev);
+    const pretaxC = contribAt(inputs.pretaxContrib, 'pretax', yourAge, ev);
+    const rothC = contribAt(inputs.rothContrib, 'roth', yourAge, ev);
+    const matchC = contribAt(inputs.employerMatch, 'match', yourAge, ev);
+
     const surplus = earnedIncome + ssIncome - spendNeed;
     let spend = 0;
 
     if (anyoneWorking && surplus >= 0) {
       // Earnings (plus any claimed SS) cover spend; save the surplus. Scaled by
       // the share of earners still working and capped by what's affordable.
-      const desired =
-        inputs.cashContrib + inputs.taxableContrib + inputs.pretaxContrib + inputs.rothContrib;
+      const desired = cashC + taxableC + pretaxC + rothC;
       const empDesired = desired * incomeFrac;
       const afford = empDesired > 0 ? Math.min(1, surplus / empDesired) : 0;
       const scale = incomeFrac * afford;
@@ -339,14 +370,14 @@ const project = (inputs: FireInputs, retireAge: number): Projection => {
       // Cash contributions fill the HYSA up to its cap; anything beyond the cap
       // overflows into the brokerage (taxable) bucket. 0 means no cap.
       const cap = inputs.cashCap > 0 ? inputs.cashCap : Infinity;
-      const intendedCash = inputs.cashContrib * scale;
+      const intendedCash = cashC * scale;
       const cashAdd = Math.min(intendedCash, Math.max(0, cap - b.cash));
       const overflow = intendedCash - cashAdd;
 
       b.cash += cashAdd;
-      b.taxable += inputs.taxableContrib * scale + overflow;
-      b.pretax += inputs.pretaxContrib * scale + inputs.employerMatch * scale;
-      b.roth += inputs.rothContrib * scale;
+      b.taxable += taxableC * scale + overflow;
+      b.pretax += pretaxC * scale + matchC * scale;
+      b.roth += rothC * scale;
     } else {
       // Fully retired, or earnings don't cover spend: draw the uncovered
       // remainder from the portfolio (cash → taxable → pre-tax → Roth).
@@ -551,6 +582,7 @@ export const defaultInputs = (currentYear: number): FireInputs => ({
   pretaxContrib: 20_000,
   rothContrib: 7_000,
   employerMatch: 5_000,
+  contributionEvents: [],
 
   yourIncome: 100_000,
   spouseIncome: 60_000,

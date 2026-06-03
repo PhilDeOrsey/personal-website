@@ -171,6 +171,79 @@ describe('mortgage', () => {
   });
 });
 
+describe('contribution-change events', () => {
+  // Zero real return (nominal == inflation) so balances are exact cumulative
+  // deposits with no growth — deposits become directly checkable. Single high
+  // earner so afford == 1 and incomeFrac == 1 (nothing scales the deposit).
+  const flat = (over: Partial<FireInputs> = {}): FireInputs => ({
+    ...base(),
+    retireMode: 'fixed',
+    retireAge: 90,
+    spouseRetireAge: 90, // both work the whole span → pure accumulation
+    yourIncome: 400_000,
+    spouseIncome: 0,
+    nominalReturn: 0.03,
+    cashReturn: 0.03,
+    inflation: 0.03,
+    mortgage: null,
+    cashBalance: 0,
+    taxableBalance: 0,
+    pretaxBalance: 0,
+    rothBalance: 0,
+    cashContrib: 0,
+    cashCap: 0,
+    taxableContrib: 0,
+    rothContrib: 0,
+    employerMatch: 0,
+    pretaxContrib: 20_000,
+    ...over,
+  });
+  const at = (rows: ReturnType<typeof simulate>['rows'], age: number) => rows.find((r) => r.yourAge === age)!;
+  const close = (a: number, b: number) => Math.abs(a - b) < 1;
+
+  test('step-up applies from the event age onward, not before', () => {
+    const rows = simulate(flat({ contributionEvents: [{ atYourAge: 45, bucket: 'pretax', newAnnual: 50_000 }] })).rows;
+    // Ages 35..44 deposit 20k each (10 years) → 200k by 44.
+    assert.ok(close(at(rows, 44).pretax, 200_000), `age44 ${at(rows, 44).pretax}`);
+    // Age 45 switches to 50k; through age 50 adds 50k×6 = 300k → 500k.
+    assert.ok(close(at(rows, 45).pretax, 250_000), `age45 ${at(rows, 45).pretax}`);
+    assert.ok(close(at(rows, 50).pretax, 500_000), `age50 ${at(rows, 50).pretax}`);
+  });
+
+  test('last matching event wins (a ramp of two step-ups)', () => {
+    const rows = simulate(
+      flat({
+        contributionEvents: [
+          { atYourAge: 45, bucket: 'pretax', newAnnual: 50_000 },
+          { atYourAge: 50, bucket: 'pretax', newAnnual: 80_000 },
+        ],
+      }),
+    ).rows;
+    // 200k by 44, +50k×5 (45..49) = 450k, then +80k×2 (50..51) = 610k.
+    assert.ok(close(at(rows, 49).pretax, 450_000), `age49 ${at(rows, 49).pretax}`);
+    assert.ok(close(at(rows, 51).pretax, 610_000), `age51 ${at(rows, 51).pretax}`);
+  });
+
+  test('a match event flows into the pre-tax bucket', () => {
+    const rows = simulate(flat({ contributionEvents: [{ atYourAge: 40, bucket: 'match', newAnnual: 10_000 }] })).rows;
+    // Before 40: +20k/yr. At 40 the year's deposit is 20k contrib + 10k match.
+    assert.ok(close(at(rows, 40).pretax - at(rows, 39).pretax, 30_000));
+  });
+
+  test('an event at/before current age applies from year 0', () => {
+    const rows = simulate(flat({ contributionEvents: [{ atYourAge: 30, bucket: 'pretax', newAnnual: 40_000 }] })).rows;
+    assert.ok(close(at(rows, base().yourAge).pretax, 40_000));
+  });
+
+  test('a contribution step-up brings FI no later', () => {
+    const b = simulate(base()).fiAge ?? 999;
+    const ev = fiOf({
+      contributionEvents: [{ atYourAge: base().yourAge, bucket: 'pretax', newAnnual: base().pretaxContrib + 15_000 }],
+    });
+    assert.ok(ev <= b);
+  });
+});
+
 describe('cash bucket', () => {
   test('never exceeds the cap', () => {
     const inp = { ...base(), cashCap: 100_000, cashContrib: 30_000 };

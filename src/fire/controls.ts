@@ -1,7 +1,7 @@
 // Renders the grouped input controls (synced slider + number box per variable)
 // and notifies a callback whenever any value changes.
 
-import type { FireInputs, IncomeEvent } from './model';
+import type { ContributionEvent, FireInputs, IncomeEvent } from './model';
 import { money, percent } from './format';
 
 type Kind = 'money' | 'percent' | 'age' | 'count' | 'plain';
@@ -56,6 +56,17 @@ const num = (
 ): NumberField => ({ type: 'number', group, label, kind, min, max, step, get, set, showIf });
 
 const isFixed = (i: FireInputs): boolean => i.retireMode === 'fixed';
+
+// Short explanatory notes shown under a group's controls. Income is a backdrop,
+// not a savings driver — what you save each year is set explicitly in
+// Contributions — so this clarifies the few things income actually affects.
+const GROUP_NOTES: Partial<Record<(typeof GROUPS)[number], string>> = {
+  Income: `Income doesn't set how much you save — your yearly savings come from the
+    <strong>Contributions</strong> below. It's used to check those contributions are
+    affordable (they scale down if income can't cover them after spend), to scale
+    saving when one spouse retires before the other, and to offset portfolio
+    withdrawals from any income still earned in retirement.`,
+};
 
 const FIELDS: Field[] = [
   // Household
@@ -177,13 +188,14 @@ export const renderControls = (
         </div>`;
       })
       .join('');
+    const note = GROUP_NOTES[g] ? `<p class="muted control-note">${GROUP_NOTES[g]}</p>` : '';
     return `<details class="control-group" open>
       <summary>${g}</summary>
-      <div class="control-list">${rows}</div>
+      <div class="control-list">${rows}${note}</div>
     </details>`;
   }).join('');
 
-  root.innerHTML = `${groupsHtml}${incomeEventsHtml(inputs)}${mortgageHtml(inputs)}`;
+  root.innerHTML = `${groupsHtml}${incomeEventsHtml(inputs)}${contribEventsHtml(inputs)}${mortgageHtml(inputs)}`;
 
   wire(root, inputs, onChange);
 };
@@ -238,6 +250,59 @@ const incomeEventsHtml = (inputs: FireInputs): string => {
   </details>`;
 };
 
+const CONTRIB_BUCKETS: { value: ContributionEvent['bucket']; label: string }[] = [
+  { value: 'cash', label: 'Cash / HYSA' },
+  { value: 'taxable', label: 'Taxable' },
+  { value: 'pretax', label: 'Pre-tax' },
+  { value: 'roth', label: 'Roth' },
+  { value: 'match', label: 'Employer match' },
+];
+
+// The current (pre-event) yearly amount for a bucket, shown as the "now" hint
+// and used to seed the amount field so edits start from the real value.
+const bucketBase = (inputs: FireInputs, bucket: ContributionEvent['bucket']): number => {
+  switch (bucket) {
+    case 'cash':
+      return inputs.cashContrib;
+    case 'taxable':
+      return inputs.taxableContrib;
+    case 'pretax':
+      return inputs.pretaxContrib;
+    case 'roth':
+      return inputs.rothContrib;
+    case 'match':
+      return inputs.employerMatch;
+  }
+};
+
+const contribEventsHtml = (inputs: FireInputs): string => {
+  const rows = inputs.contributionEvents
+    .map((e, i) => {
+      const opts = CONTRIB_BUCKETS.map(
+        (b) => `<option value="${b.value}"${b.value === e.bucket ? ' selected' : ''}>${b.label}</option>`,
+      ).join('');
+      return `<div class="event-row contrib-event-row" data-cevent="${i}">
+        <select data-role="ce-bucket">${opts}</select>
+        <span>at your age</span>
+        <input type="number" data-role="ce-age" min="18" max="100" value="${e.atYourAge}" />
+        <span class="ce-verb">set to</span>
+        <input type="number" data-role="ce-amt" min="0" step="1000" value="${e.newAnnual}" />
+        <span class="muted ce-now" data-role="ce-now">/ yr (now ${money(bucketBase(inputs, e.bucket))})</span>
+        <button type="button" data-role="ce-del" aria-label="Remove">✕</button>
+      </div>`;
+    })
+    .join('');
+  return `<details class="control-group" open>
+    <summary>Contribution changes</summary>
+    <div class="control-list">
+      <p class="muted control-note">Sets a bucket's yearly contribution to a new amount from that age on
+        (it's the new total, not an addition) — e.g. save more once daycare ends or the mortgage is paid off.</p>
+      <div class="event-list">${rows || '<p class="muted">No contribution changes.</p>'}</div>
+      <button type="button" class="add-event" data-role="ce-add">+ Add contribution change</button>
+    </div>
+  </details>`;
+};
+
 const wire = (root: HTMLElement, inputs: FireInputs, onChange: () => void): void => {
   // Slider/number/select fields.
   root.querySelectorAll<HTMLElement>('.control[data-idx]').forEach((el) => {
@@ -276,6 +341,7 @@ const wire = (root: HTMLElement, inputs: FireInputs, onChange: () => void): void
 
   wireMortgage(root, inputs, onChange);
   wireEvents(root, inputs, onChange);
+  wireContribEvents(root, inputs, onChange);
 };
 
 const wireMortgage = (root: HTMLElement, inputs: FireInputs, onChange: () => void): void => {
@@ -344,7 +410,7 @@ const wireEvents = (root: HTMLElement, inputs: FireInputs, onChange: () => void)
     onChange();
   });
 
-  root.querySelectorAll<HTMLElement>('.event-row').forEach((rowEl) => {
+  root.querySelectorAll<HTMLElement>('.event-row[data-event]').forEach((rowEl) => {
     const i = Number(rowEl.dataset.event);
     const who = rowEl.querySelector<HTMLSelectElement>('[data-role="ev-who"]')!;
     const age = rowEl.querySelector<HTMLInputElement>('[data-role="ev-age"]')!;
@@ -365,6 +431,56 @@ const wireEvents = (root: HTMLElement, inputs: FireInputs, onChange: () => void)
     });
     del.addEventListener('click', () => {
       inputs.incomeEvents.splice(i, 1);
+      renderControls(root, inputs, onChange);
+      onChange();
+    });
+  });
+};
+
+const wireContribEvents = (root: HTMLElement, inputs: FireInputs, onChange: () => void): void => {
+  const add = root.querySelector<HTMLButtonElement>('[data-role="ce-add"]');
+  add?.addEventListener('click', () => {
+    const last = inputs.contributionEvents[inputs.contributionEvents.length - 1];
+    const event: ContributionEvent = {
+      atYourAge: last ? last.atYourAge + 5 : inputs.yourAge + 5,
+      bucket: 'pretax',
+      newAnnual: inputs.pretaxContrib,
+    };
+    inputs.contributionEvents.push(event);
+    renderControls(root, inputs, onChange);
+    onChange();
+  });
+
+  root.querySelectorAll<HTMLElement>('.event-row[data-cevent]').forEach((rowEl) => {
+    const i = Number(rowEl.dataset.cevent);
+    const bucket = rowEl.querySelector<HTMLSelectElement>('[data-role="ce-bucket"]')!;
+    const age = rowEl.querySelector<HTMLInputElement>('[data-role="ce-age"]')!;
+    const amt = rowEl.querySelector<HTMLInputElement>('[data-role="ce-amt"]')!;
+    const now = rowEl.querySelector<HTMLElement>('[data-role="ce-now"]')!;
+    const del = rowEl.querySelector<HTMLButtonElement>('[data-role="ce-del"]')!;
+
+    bucket.addEventListener('change', () => {
+      const b = bucket.value as ContributionEvent['bucket'];
+      // Re-seed the amount with the picked bucket's current value, so the field
+      // shows where you're starting from and you edit up/down — never a blank
+      // "add" that silently resets the bucket to a small number.
+      const base = bucketBase(inputs, b);
+      inputs.contributionEvents[i].bucket = b;
+      inputs.contributionEvents[i].newAnnual = base;
+      amt.value = String(base);
+      now.textContent = `/ yr (now ${money(base)})`;
+      onChange();
+    });
+    age.addEventListener('input', () => {
+      inputs.contributionEvents[i].atYourAge = Number(age.value);
+      onChange();
+    });
+    amt.addEventListener('input', () => {
+      inputs.contributionEvents[i].newAnnual = Number(amt.value);
+      onChange();
+    });
+    del.addEventListener('click', () => {
+      inputs.contributionEvents.splice(i, 1);
       renderControls(root, inputs, onChange);
       onChange();
     });

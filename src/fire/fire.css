@@ -143,6 +143,11 @@ select {
   width: 5rem;
 }
 
+.ce-now {
+  font-size: inherit;
+  white-space: nowrap;
+}
+
 .add-event,
 .scn-row button,
 .btn-like {
@@ -175,6 +180,12 @@ select {
 .muted {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.control-note {
+  margin: 0.25rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 /* ---- Results panel ---- */
