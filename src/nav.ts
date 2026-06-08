@@ -15,11 +15,5 @@ export const nav: NavItem[] = [
       { label: 'Math Circles', href: 'math-circles/' },
     ],
   },
-  {
-    label: 'Projects',
-    children: [
-      { label: 'Project 1', href: 'projects/project1/' },
-      { label: 'Project 2', href: 'projects/project2/' },
-    ],
-  },
+  { label: 'Projects', href: 'projects/' },
 ];
